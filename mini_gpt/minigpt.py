@@ -1,6 +1,7 @@
 import os
 import torch
 from torch import nn
+from tqdm import tqdm
 from torch.utils.data import Dataset,DataLoader
 def read_data(path,num=None):
     with open(path,encoding='utf-8') as f:
@@ -56,36 +57,60 @@ class EmbeddingLayer(nn.Module):
 class Feed_Forward(nn.Module):
     def __init__(self):
         super().__init__()
-
+        self.lin1 = nn.Linear(768,1024)
+        self.relu = nn.ReLU()
+        self.lin2 = nn.Linear(1024,768)
+        self.layer_norm = nn.LayerNorm(768)
     def forward(self, x):
-        pass
+        x_copy = x.clone()
+        x = self.lin1(x)
+        x = self.relu(x)
+        x = self.lin2(x)
+
+        x = x + x_copy
+        x = self.layer_norm(x)
+        return x
 
 class MultiHeadAttention(nn.Module):
     def __init__(self):
         super().__init__()
-
+        self.Q = nn.Linear(768,768)
+        self.layer_norm = nn.LayerNorm(768)
     def forward(self, x):
-        pass
+        x_copy = x.clone()
+        x =self.Q(x)
+        x = x+x_copy
+        x = self.layer_norm(x)
+        return x
 
 class DecoderBlock(nn.Module):
     def __init__(self):
         super().__init__()
         self.attention_block1 = MultiHeadAttention()
         self.attention_block2 = MultiHeadAttention()
+
         self.feed = Feed_Forward()
     def forward(self,x):
-        pass
+
+        x = self.attention_block1(x)
+        x = self.attention_block2(x)
+        x = self.feed(x)
+
+        return x
+
+
 
 
 class Decoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.embedding = EmbeddingLayer()
-        self.layers = [DecoderBlock() for i in range(3)]
+        self.layers = nn.Sequential(*[DecoderBlock() for i in range(3)])
 
 
     def forward(self,x):
         x = self.embedding(x)
+        x = self.layers(x)
         return x
 
 class GPT_Model(nn.Module):
@@ -95,8 +120,13 @@ class GPT_Model(nn.Module):
         self.cls = nn.Linear(768,vocab_len)
         self.loss_fn = nn.CrossEntropyLoss()
 
-    def forward(self,x,y):
+    def forward(self,x,y=None):
         x =self.decoder(x)
+        x = self.cls(x)
+
+        if y is not None:
+            loss = self.loss_fn(x.reshape(-1,x.shape[-1]),y.reshape(-1))
+            return loss
         return x
 
 
@@ -106,18 +136,25 @@ if __name__ == '__main__':
 
     vocab_len = len(word_2_index)
     batch_size = 3
-    epoch = 1
+    epoch = 10
     max_seq_len = 512
-    lr = 0.0001
-
+    lr = 0.001
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    device = "cpu"
 
     train_dataset = G_dataset(all_data,word_2_index)
     train_dataloader = DataLoader(train_dataset,shuffle=False,batch_size=batch_size,collate_fn=train_dataset.process_data)
 
-    model = GPT_Model()
+    model = GPT_Model().to(device)
     opt = torch.optim.Adam(model.parameters(),lr = lr)
 
     for e in range(epoch):
-        for x,y in train_dataloader:
+        for x,y in tqdm(train_dataloader):
+            x = x.to(device)
+            y = y.to(device)
 
+            opt.zero_grad()
             loss = model(x,y)
+            loss.backward()
+            opt.step()
+        print(loss)
