@@ -1,4 +1,5 @@
 import os
+import math
 import torch
 from torch import nn
 from tqdm import tqdm
@@ -72,13 +73,33 @@ class Feed_Forward(nn.Module):
         return x
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self):
+    def __init__(self,nhead=8):
         super().__init__()
+        assert 768%nhead==0
+        self.sqrt_d_k = math.sqrt(768//nhead)
         self.Q = nn.Linear(768,768)
+        self.K = nn.Linear(768,768)
+        self.V = nn.Linear(768,768)
+        self.nhead = nhead
+        self.softmax = nn.Softmax(dim=2)
         self.layer_norm = nn.LayerNorm(768)
     def forward(self, x):
+        batch,seq_len,emb_num = x.shape
         x_copy = x.clone()
-        x =self.Q(x)
+
+        #x = x.reshape()
+        q = self.Q(x)
+        q = q.reshape(batch,seq_len,self.nhead,-1).transpose(1,2)
+
+        k = self.V(x)
+        k = k.reshape(batch, seq_len, self.nhead, -1).transpose(1, 2)
+
+        v = self.V(x)
+        v = v.reshape(batch, seq_len, self.nhead, -1).transpose(1, 2)
+
+        x = self.softmax(q@k.transpose(-1,-2)/self.sqrt_d_k) @ v
+
+        x = x.transpose(1,2).reshape(batch,seq_len,emb_num)
         x = x+x_copy
         x = self.layer_norm(x)
         return x
@@ -138,7 +159,7 @@ if __name__ == '__main__':
     batch_size = 3
     epoch = 10
     max_seq_len = 512
-    lr = 0.001
+    lr = 0.0001
     device = "mps" if torch.backends.mps.is_available() else "cpu"
     device = "cpu"
 
