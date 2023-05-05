@@ -99,9 +99,14 @@ class MultiHeadAttention(nn.Module):
 
         weight =  q @ k.transpose(-1,-2)/self.sqrt_d_k
         # attention_mask = attention_mask.unsqueeze(1).expand(batch,1,seq_len,seq_len)
+        #attention_mask
         attention_mask = attention_mask.unsqueeze(1).repeat(1,1,1,seq_len)
         attention_mask =attention_mask.repeat(1,self.nhead,1,1)
-        weight.masked_fill_(attention_mask,-1e9)
+        #look_ahead_mask
+        look_ahead_mask = torch.triu(torch.ones_like(attention_mask),1)
+
+        mask = (attention_mask | look_ahead_mask).to(x.device)
+        weight.masked_fill_(mask,-1e9)
         score = self.softmax(weight)
         x = score @ v
 
