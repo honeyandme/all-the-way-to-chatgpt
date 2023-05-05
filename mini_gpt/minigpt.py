@@ -83,7 +83,7 @@ class MultiHeadAttention(nn.Module):
         self.nhead = nhead
         self.softmax = nn.Softmax(dim=2)
         self.layer_norm = nn.LayerNorm(768)
-    def forward(self, x):
+    def forward(self, x,attention_mask):
         batch,seq_len,emb_num = x.shape
         x_copy = x.clone()
 
@@ -97,7 +97,13 @@ class MultiHeadAttention(nn.Module):
         v = self.V(x)
         v = v.reshape(batch, seq_len, self.nhead, -1).transpose(1, 2)
 
-        x = self.softmax(q@k.transpose(-1,-2)/self.sqrt_d_k) @ v
+        weight =  q @ k.transpose(-1,-2)/self.sqrt_d_k
+        # attention_mask = attention_mask.unsqueeze(1).expand(batch,1,seq_len,seq_len)
+        attention_mask = attention_mask.unsqueeze(1).repeat(1,1,1,seq_len)
+        attention_mask =attention_mask.repeat(1,self.nhead,1,1)
+        weight.masked_fill_(attention_mask,-1e9)
+        score = self.softmax(weight)
+        x = score @ v
 
         x = x.transpose(1,2).reshape(batch,seq_len,emb_num)
         x = x+x_copy
@@ -111,27 +117,32 @@ class DecoderBlock(nn.Module):
         self.attention_block2 = MultiHeadAttention()
 
         self.feed = Feed_Forward()
-    def forward(self,x):
+    def forward(self,x,attention_mask):
 
-        x = self.attention_block1(x)
-        x = self.attention_block2(x)
+        x = self.attention_block1(x,attention_mask)
+        x = self.attention_block2(x,attention_mask)
         x = self.feed(x)
 
         return x
 
 
 
-
+def get_attention_mask(x):
+    attention_mask = x==0
+    attention_mask = attention_mask.unsqueeze(-1)
+    return attention_mask
 class Decoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.embedding = EmbeddingLayer()
-        self.layers = nn.Sequential(*[DecoderBlock() for i in range(3)])
+        self.layers = nn.ModuleList([DecoderBlock() for i in range(3)])
 
 
     def forward(self,x):
+        attention_mask = get_attention_mask(x)
         x = self.embedding(x)
-        x = self.layers(x)
+        for layer in self.layers:
+            x = layer(x,attention_mask)
         return x
 
 class GPT_Model(nn.Module):
@@ -142,6 +153,7 @@ class GPT_Model(nn.Module):
         self.loss_fn = nn.CrossEntropyLoss()
 
     def forward(self,x,y=None):
+
         x =self.decoder(x)
         x = self.cls(x)
 
