@@ -24,7 +24,7 @@ class G_dataset(Dataset):
         data = self.all_data[x].split('\n')
         text_idx = []
         for d in data:
-            text_idx.extend([word_2_index[i] for i in d])
+            text_idx.extend([word_2_index.get(i,1) for i in d])
             text_idx.append(2)
         input_idx = text_idx[:-1]
         label_idx = text_idx[1:]
@@ -73,7 +73,7 @@ class Feed_Forward(nn.Module):
         return x
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self,nhead=8):
+    def __init__(self,nhead=4):
         super().__init__()
         assert 768%nhead==0
         self.sqrt_d_k = math.sqrt(768//nhead)
@@ -165,20 +165,34 @@ class GPT_Model(nn.Module):
         if y is not None:
             loss = self.loss_fn(x.reshape(-1,x.shape[-1]),y.reshape(-1))
             return loss
-        return x
+        return torch.argmax(x,dim=-1)
+    def answer(self,input_text):
+        input_idx = [word_2_index.get(i,1) if i != '\n' else word_2_index['<sep>'] for i in input_text]
+        input_idx = torch.tensor([input_idx],device=device)
+
+
+        while True:
+            pre = int(self.forward(input_idx)[0][-1])
+            input_idx = torch.cat((input_idx, torch.tensor([[pre]],device=device)), dim=1)
+
+            if pre==2:
+                break
+        return input_idx.tolist()[0]
+
+        print()
 
 
 if __name__ == '__main__':
-    all_data = read_data(os.path.join('data','train.txt'),200)
+    all_data = read_data(os.path.join('data','train.txt'),10)
     word_2_index,index_2_word = build_word_2_index(os.path.join('data','vocab.txt'))
 
     vocab_len = len(word_2_index)
-    batch_size = 3
-    epoch = 10
-    max_seq_len = 512
+    batch_size = 1
+    epoch = 50
+    max_seq_len = 256
     lr = 0.0001
     device = "mps" if torch.backends.mps.is_available() else "cpu"
-    device = "cpu"
+    # device = "cpu"
 
     train_dataset = G_dataset(all_data,word_2_index)
     train_dataloader = DataLoader(train_dataset,shuffle=False,batch_size=batch_size,collate_fn=train_dataset.process_data)
@@ -196,3 +210,10 @@ if __name__ == '__main__':
             loss.backward()
             opt.step()
         print(loss)
+
+    while True:
+        input_text = input('请输入:') +'\n'
+        pre = model.answer(input_text)
+        pre = [index_2_word[i] for i in pre]
+        print(pre)
+
