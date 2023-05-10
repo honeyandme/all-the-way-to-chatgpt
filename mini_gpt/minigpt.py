@@ -207,7 +207,7 @@ if __name__ == '__main__':
     word_2_index,index_2_word = build_word_2_index(os.path.join('data','vocab.txt'))
 
     vocab_len = len(word_2_index)
-    batch_size = 40
+    batch_size = 50
     epoch = 5
     max_seq_len = 128
     lr = 0.0002
