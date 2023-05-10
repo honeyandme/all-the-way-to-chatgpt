@@ -169,3 +169,4 @@ cython_debug/
 bert_base_chinese/
 *.pickle
 cache_dir/
+model_output/
