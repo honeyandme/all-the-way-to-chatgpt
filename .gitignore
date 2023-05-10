@@ -168,3 +168,4 @@ cython_debug/
 *.t
 bert_base_chinese/
 *.pickle
+cache_dir/
