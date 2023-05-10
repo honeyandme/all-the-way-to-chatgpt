@@ -27,7 +27,7 @@ if __name__ == "__main__":
     raw_dataset = load_dataset("csv",data_files={"train":train_data,"test":test_data},cache_dir="cache_dir")
 
     tokenizer = BertTokenizerFast.from_pretrained(os.path.join('..','..','nlp','data','bert_base_chinese'))
-    tokenizer.add_special_tokens({"bos_token":"[begin]","eos_token":"[end]"})
+    tokenizer.add_special_tokens({"bos_token":"[begin]","eos_token":"[end]",'pad_token': '[PAD]'})
     tokenized_dataset = raw_dataset.map(tokenize,batched=True,remove_columns=raw_dataset['train'].column_names)
 
     config = GPT2Config.from_pretrained("gpt2",
@@ -41,20 +41,21 @@ if __name__ == "__main__":
 
     data_collator = DataCollatorForLanguageModeling(tokenizer,mlm=False)
     args = TrainingArguments(
-        learning_rate=1e-5,
-        num_train_epochs=100,
-        per_device_train_batch_size=10,
-        per_device_eval_batch_size=10,
+        output_dir="model_output",
+        per_device_train_batch_size=4,
+        per_device_eval_batch_size=16,
+        evaluation_strategy="steps",
         eval_steps=2000,
         logging_steps=2000,
-        gradient_accumulation_steps=5,
+        gradient_accumulation_steps=8,
+        num_train_epochs=2,
         weight_decay=0.1,
-        warmup_steps=1000,
+        warmup_steps=1_000,
         lr_scheduler_type="cosine",
-        save_steps=100,
-        output_dir="model_output",
-
-        fp16=False,
+        learning_rate=5e-4,
+        save_steps=10,
+        # fp16=True,
+        push_to_hub=False,
     )
 
     trianer = Trainer(
