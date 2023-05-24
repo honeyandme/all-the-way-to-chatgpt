@@ -171,5 +171,6 @@ bert_base_chinese/
 cache_dir/
 model_output/
 chat_glm_int4/
+checkpoint-100/
 
 
