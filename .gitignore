@@ -173,5 +173,6 @@ model_output/
 chat_glm_int4/
 checkpoint-100/
 sen_model/
+temp/
 
 
